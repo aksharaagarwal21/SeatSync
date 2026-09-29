@@ -8,6 +8,7 @@ SeatSync is a full-stack event booking platform in the spirit of BookMyShow or T
 - **Two interchangeable locking strategies** (optimistic `@Version`, pessimistic `SELECT … FOR UPDATE`) behind one switch, so they can be benchmarked
 - **Database-level guarantees** (unique and partial unique indexes, check constraints) as a second safety layer
 - **Real-time availability** over Server-Sent Events, with polling as a fallback
+- **Two-step verification**: emailed one-time codes for sign-in, registration, every booking and every cancellation, each code bound to the exact action it approves
 - **Proof, not claims**: 100-thread race tests against real PostgreSQL, and a 500-user JMeter plan with a double-booking verification script
 
 ---
@@ -22,6 +23,7 @@ SeatSync is a full-stack event booking platform in the spirit of BookMyShow or T
 - [Database schema](#database-schema)
 - [Testing strategy](#testing-strategy)
 - [Load testing](#load-testing)
+- [Two-step verification](#two-step-verification)
 - [Security notes](#security-notes)
 - [Screenshots](#screenshots)
 
@@ -197,6 +199,7 @@ docker compose up --build
 | Web app | http://localhost:3000 |
 | API | http://localhost:8080/api |
 | PostgreSQL | localhost:5432 (`seatsync` / `seatsync`) |
+| Test inbox (Mailpit) | http://localhost:8025, where every verification code arrives |
 
 The `dev` profile seeds on first start: **50 events × 200 seats = 10,000 seats**, about 1,800 bookings, 20 customers and 500 load-test accounts.
 
@@ -206,7 +209,7 @@ The `dev` profile seeds on first start: **50 events × 200 seats = 10,000 seats*
 | Customer | `demo@seatsync.dev` | `Demo@12345` |
 | Load test | `loadtest1…500@seatsync.dev` | `LoadTest@123` |
 
-Reset everything with `docker compose down -v`.
+Signing in, booking and cancelling each email a 6-digit code; open http://localhost:8025 to read it. Reset everything with `docker compose down -v`.
 
 ### Without Docker for the app
 
@@ -215,6 +218,8 @@ docker run -d --name seatsync-db -e POSTGRES_DB=seatsync -e POSTGRES_USER=seatsy
   -e POSTGRES_PASSWORD=seatsync -p 5432:5432 postgres:16-alpine
 
 cd backend && ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev
+docker run -d --name seatsync-mail -p 1025:1025 -p 8025:8025 axllent/mailpit   # verification emails
+
 cd frontend && npm install && npm run dev      # http://localhost:5173 (proxies /api → :8080)
 ```
 
@@ -230,6 +235,8 @@ All secrets come from the environment; see [`.env.example`](.env.example).
 | `JWT_EXPIRATION` | Token lifetime, e.g. `24h` |
 | `JWT_COOKIE_SECURE` | `true` behind HTTPS |
 | `BOOKING_LOCKING_STRATEGY` | `OPTIMISTIC` (default) or `PESSIMISTIC` |
+| `OTP_ENABLED` | Two-step verification (default `true`; `false` only for load tests) |
+| `MAIL_HOST`, `MAIL_PORT`, `MAIL_USERNAME`, `MAIL_PASSWORD`, `MAIL_SMTP_AUTH`, `MAIL_STARTTLS`, `MAIL_FROM` | SMTP for verification emails (Mailpit locally, any provider in production) |
 | `SPRING_PROFILES_ACTIVE` | `dev` seeds demo data |
 
 ---
@@ -246,8 +253,9 @@ Validation failures add `fieldErrors: { "email": "Enter a valid email address" }
 
 | Method | Endpoint | Access | Purpose |
 |---|---|---|---|
-| POST | `/auth/register` | Public | Create account, start session |
-| POST | `/auth/login` | Public | Returns `{token, expiresAt, user}` and sets an HttpOnly cookie |
+| POST | `/auth/register` | Public | Create account and email a code to verify the address |
+| POST | `/auth/login` | Public | Checks the password and emails a sign-in code: `{verification}` |
+| POST | `/auth/verify` | Public | `{challengeId, code}` → `{token, expiresAt, user}` and an HttpOnly cookie |
 | POST | `/auth/logout` | Public | Clears the session cookie |
 | GET | `/auth/me` | User | Current user |
 | GET | `/events?q&category&city&from&to&page&size` | Public | Upcoming events with price range and availability |
@@ -257,10 +265,12 @@ Validation failures add `fieldErrors: { "email": "Enter a valid email address" }
 | GET | `/events/{id}/seats/stream` | Public | SSE stream of seat changes |
 | POST | `/holds` | User | Hold seats for 5 minutes |
 | DELETE | `/holds?eventId=` | User | Release your holds |
-| POST | `/bookings` | User | Book seats (all or nothing), `201` or `409` |
+| POST | `/verifications` | User | Email a code approving a booking (`eventId`, `seatIds`) or a cancellation (`bookingId`) |
+| POST | `/verifications/{id}/resend` | Public | New code for the same challenge (30 s cooldown, 5 sends max) |
+| POST | `/bookings` | User | Book seats with `verification: {challengeId, code}`; all or nothing, `201` or `409` |
 | GET | `/bookings/me` | User | Your bookings, newest first |
 | GET | `/bookings/{id}` | Owner/Admin | Booking details |
-| DELETE | `/bookings/{id}` | Owner/Admin | Cancel (until 24h before the event) |
+| POST | `/bookings/{id}/cancel` | Owner/Admin | Cancel with `verification` (until 24h before the event) |
 | GET | `/admin/dashboard` | Admin | Totals, 14-day ticket chart, recent bookings |
 | GET/POST | `/admin/events` | Admin | List / create (seat layout generated) |
 | GET/PUT/DELETE | `/admin/events/{id}` | Admin | Read / update (details, prices, open/pause) / delete |
@@ -278,6 +288,7 @@ erDiagram
     EVENTS ||--o{ BOOKINGS : for
     BOOKINGS ||--|{ BOOKING_SEATS : contains
     SEATS ||--o{ BOOKING_SEATS : "booked as"
+    USERS ||--o{ OTP_CHALLENGES : receives
 
     USERS {
         bigint id PK
@@ -325,6 +336,16 @@ erDiagram
         numeric price
         boolean active
     }
+    OTP_CHALLENGES {
+        uuid id PK
+        bigint user_id FK
+        varchar purpose "LOGIN, REGISTRATION, BOOKING, CANCELLATION"
+        varchar context "e.g. event:12 seats:2251,2252"
+        varchar code_hash "HMAC-SHA256"
+        timestamptz expires_at
+        int attempts
+        timestamptz consumed_at
+    }
 ```
 
 The schema is managed by Flyway ([`V1__initial_schema.sql`](backend/src/main/resources/db/migration/V1__initial_schema.sql)); Hibernate only validates it.
@@ -357,7 +378,7 @@ cd backend && ./mvnw verify      # needs Docker for Testcontainers
 cd frontend && npm run lint && npm run build
 ```
 
-**58 backend tests.** Integration and concurrency tests run against a real PostgreSQL 16 in Docker (Testcontainers). Row locks, version checks and partial indexes behave exactly as in production; H2 would not prove anything here.
+**73 backend tests.** Integration and concurrency tests run against a real PostgreSQL 16 in Docker (Testcontainers). Row locks, version checks and partial indexes behave exactly as in production; H2 would not prove anything here.
 
 | Suite | What it proves |
 |---|---|
@@ -370,6 +391,7 @@ cd frontend && npm run lint && npm run build
 | `BookingFlowIntegrationTest` | Browse → hold → book → **database state** → cancel → rebook; 409 with no partial booking; 400 validation; foreign seats |
 | `AdminAuthorizationIntegrationTest` | USER gets 403 on admin APIs; admin creates events with generated seats, pauses sales, cannot delete events with bookings |
 | **`SeatBookingConcurrencyTest`** | Run for **both** strategies: **100 threads → 1 booking, 99 conflicts**, `COUNT(confirmed bookings for seat) = 1`; 50 users on 50 different seats all succeed; 60 users with shuffled overlapping 3-seat sets → no deadlocks, every success all-or-nothing, zero double bookings |
+| `TwoStepVerificationIntegrationTest` | Wrong codes count down and lock after 5; expired and reused codes rejected; codes stored only as hashes; a booking code only approves its own seats; another user's code is useless; losing the seat race leaves the code unused (rolled back); cancellation needs its own code; resend cooldown; rate limiting |
 | `LockingMechanismTest` | Deterministic demos: a stale `@Version` update is rejected; a `FOR UPDATE` lock makes a competing transaction wait, then see `BOOKED` |
 
 ### Concurrency results
@@ -400,8 +422,10 @@ Booking samplers accept `201` or `409`. Conflicts are relabelled `… (409 confl
 
 Requires Apache JMeter 5.6.x running on **Java 17 or 21**. JMeter 5.6.3 bundles Groovy 3, which cannot compile the plan's JSR223 scripts on Java 23+ (`Unsupported class file major version 67`); point `JAVA_HOME` at a 21 JDK/JRE for JMeter.
 
+JMeter can't read email, so run the backend with two-step verification off for load tests only: `OTP_ENABLED=false`.
+
 ```bash
-docker compose down -v && docker compose up --build -d     # fresh seeded database
+docker compose down -v && OTP_ENABLED=false docker compose up --build -d     # fresh seeded database, codes off
 
 jmeter -n -t load-tests/seatsync-load-test.jmx -l load-tests/results/results.jtl \
        -e -o load-tests/results/report                     # HTML dashboard: avg, P95, throughput, errors
@@ -457,8 +481,34 @@ No double bookings found.
 
 ---
 
+## Two-step verification
+
+Every sensitive step needs a 6-digit code emailed to the account owner:
+
+| Action | When the code is sent | What it unlocks |
+|---|---|---|
+| Sign in | After a correct password | The session cookie (`POST /api/auth/verify`) |
+| Register | After the sign-up form | Account activation (proves the email address) |
+| Book | On **Confirm Booking** | That booking, for **exactly those seats** |
+| Cancel | On **Cancel booking** | Cancelling **that one booking** |
+
+The email says what is being approved, for example *"Book F8, F10 for Coastal Beats Festival (₹2,998)"*.
+
+**How codes are protected**
+- 6 digits from `SecureRandom`, valid for 5 minutes, usable once.
+- Stored only as **HMAC-SHA256** with a server key, so a leaked table can't be brute-forced offline. Comparison is constant-time.
+- **Bound to an action:** a code issued for seats A1+A2 can't book A3, and can't be used by anyone else.
+- **5 wrong attempts lock the code.** Failed attempts are recorded in their own transaction (`REQUIRES_NEW`), so the failing request still counts, and a row lock stops parallel guessing.
+- **Resend** has a 30-second cooldown and a cap of 5 sends. Each user can start at most 10 challenges per 15 minutes (`429` beyond that).
+- **Transactional consumption:** a booking code is marked used inside the booking transaction. If the seats are taken first (`409`), the code isn't burnt and the user can simply pick other seats.
+- An **unverified sign-up can be restarted** with the same email, so nobody can block an address they don't own.
+- The challenge id is a random UUID, so it can't be guessed during sign-in.
+
+Locally, emails go to **Mailpit** (http://localhost:8025). In production, set the `MAIL_*` variables to any SMTP provider.
+
 ## Security notes
 
+- **Two-step verification** protects sign-in, registration, booking and cancellation. See [above](#two-step-verification).
 - **Passwords** are hashed with BCrypt. Login does the same work for unknown emails, so response time doesn't reveal which accounts exist.
 - **JWT in an HttpOnly cookie** (`SameSite=Lax`, `Path=/api`, `Secure` when `JWT_COOKIE_SECURE=true`). Page scripts can never read the token, which removes the main XSS token-theft risk of `localStorage`. The same token is also returned in the login body and accepted as `Authorization: Bearer` for API clients such as JMeter.
 - **CSRF:** the API is stateless JSON. The `Lax` cookie is not sent on cross-site `POST`/`PUT`/`DELETE`, and nginx serves the app and API from one origin, so no CORS is enabled. Add CSRF tokens if the cookie must ever be sent cross-site.
@@ -478,6 +528,8 @@ No double bookings found.
 | **Review with hold countdown** | **Booking confirmed** |
 | ![My bookings](docs/screenshots/my-bookings.png) | ![Admin](docs/screenshots/admin-overview.png) |
 | **My bookings** | **Admin overview** |
+| ![Sign-in code](docs/screenshots/verify-sign-in.png) | ![Booking code](docs/screenshots/verify-booking.png) |
+| **Two-step sign-in (emailed code)** | **Booking confirmed with a code for these exact seats** |
 
 <p align="center"><img src="docs/screenshots/mobile-seats.png" width="300" alt="Mobile seat selection" /><br/><b>Mobile: scrollable map and sticky booking bar</b></p>
 
