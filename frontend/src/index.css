@@ -82,6 +82,152 @@
   }
 }
 
+/* ─── Logo ────────────────────────────────────────────────────────────────
+   Rest: dark tile, stage arc, eight seats and one green "your seat" that pings
+   softly (live sync). Hover/focus: a green selection wave sweeps the seats
+   diagonally, the stage redraws, your seat pops. Loaders loop the wave. */
+@layer components {
+  .logo-mark {
+    overflow: visible;
+    transition: transform 180ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  }
+
+  .logo-mark .logo-seat {
+    fill: #52525b;
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .logo-mark .logo-seat-selected,
+  .logo-mark .logo-ping {
+    transform-box: fill-box;
+    transform-origin: center;
+  }
+
+  .logo-mark .logo-glow {
+    opacity: 0;
+    transition: opacity 300ms ease;
+  }
+
+  .logo-mark .logo-stage {
+    stroke-dasharray: 1;
+    stroke-dashoffset: 0;
+  }
+
+  .logo-mark[data-animate='hover'] .logo-ping {
+    animation: logo-ping 4.8s ease-out 1.2s infinite;
+  }
+
+  /* Colour lives here, not in a utility class: utilities sit in a later layer and would win over :hover. */
+  .logo-sync {
+    color: var(--color-zinc-500);
+    transition: color 200ms ease;
+  }
+
+  .logo:hover .logo-mark,
+  .logo:focus-visible .logo-mark {
+    transform: rotate(-4deg) scale(1.06);
+  }
+
+  .logo:active .logo-mark {
+    transform: scale(0.94);
+    transition-duration: 80ms;
+  }
+
+  .logo:hover .logo-sync,
+  .logo:focus-visible .logo-sync {
+    color: var(--color-brand-700);
+  }
+
+  .logo:hover .logo-mark .logo-glow,
+  .logo:focus-visible .logo-mark .logo-glow {
+    opacity: 1;
+  }
+
+  .logo:hover .logo-mark .logo-seat,
+  .logo:focus-visible .logo-mark .logo-seat {
+    animation: logo-seat-wave 700ms ease-out both;
+    animation-delay: calc(var(--i) * 70ms);
+  }
+
+  .logo:hover .logo-mark .logo-stage,
+  .logo:focus-visible .logo-mark .logo-stage {
+    animation: logo-stage-draw 520ms ease-out both;
+  }
+
+  .logo:hover .logo-mark .logo-seat-selected,
+  .logo:focus-visible .logo-mark .logo-seat-selected {
+    animation: logo-seat-pop 420ms cubic-bezier(0.34, 1.56, 0.64, 1) 300ms both;
+  }
+
+  .logo:hover .logo-mark .logo-ping,
+  .logo:focus-visible .logo-mark .logo-ping {
+    animation: logo-ping 900ms ease-out 480ms both;
+  }
+
+  .logo-mark[data-animate='loop'] .logo-seat {
+    animation: logo-seat-wave 1.4s ease-in-out infinite;
+    animation-delay: calc(var(--i) * 110ms);
+  }
+
+  .logo-mark[data-animate='loop'] .logo-seat-selected {
+    animation: logo-seat-pop 1.4s ease-in-out 0.25s infinite;
+  }
+
+  .logo-mark[data-animate='loop'] .logo-stage {
+    animation: logo-stage-draw 1.4s ease-in-out infinite alternate;
+  }
+}
+
+@keyframes logo-seat-wave {
+  0%,
+  100% {
+    fill: #52525b;
+    transform: translateY(0);
+  }
+  35% {
+    fill: #4ade80;
+    transform: translateY(-1.2px);
+  }
+}
+
+@keyframes logo-seat-pop {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.35);
+  }
+}
+
+@keyframes logo-stage-draw {
+  from {
+    stroke-dashoffset: 1;
+  }
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+@keyframes logo-ping {
+  0% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+  25%,
+  100% {
+    opacity: 0;
+    transform: scale(2.2);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark .logo-ping {
+    display: none;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

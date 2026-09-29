@@ -1,6 +1,7 @@
 import { lazy, Suspense } from 'react'
 import { Route, Routes } from 'react-router-dom'
 import { AppLayout } from './components/layout/AppLayout'
+import { LogoLoader } from './components/brand/Logo'
 import { RequireAuth } from './components/layout/RequireAuth'
 import { EventsPage } from './pages/EventsPage'
 import { EventDetailPage } from './pages/EventDetailPage'
@@ -35,7 +36,7 @@ export function App() {
           <Route
             path="admin/*"
             element={
-              <Suspense fallback={null}>
+              <Suspense fallback={<LogoLoader label="Loading admin" />}>
                 <AdminRoutes />
               </Suspense>
             }

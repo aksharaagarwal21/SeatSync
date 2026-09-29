@@ -1,23 +1,10 @@
 import { useEffect, useRef, useState } from 'react'
-import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import { NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { LogOut, Menu, X } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { cn } from '../../lib/cn'
 import { ButtonLink } from '../ui/Button'
-
-export function Logo() {
-  return (
-    <Link to="/" className="flex items-center gap-2 rounded-md text-[15px] font-semibold tracking-tight text-zinc-900">
-      <span className="flex size-7 items-center justify-center rounded-lg bg-brand-700" aria-hidden>
-        <svg viewBox="0 0 32 32" className="size-4.5">
-          <path d="M9 20v-6a3 3 0 0 1 3-3h8a3 3 0 0 1 3 3v6" fill="none" stroke="#fff" strokeWidth="2.6" strokeLinecap="round" />
-          <path d="M7 20h18v3H7z" fill="#fff" />
-        </svg>
-      </span>
-      SeatSync
-    </Link>
-  )
-}
+import { Logo } from '../brand/Logo'
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
