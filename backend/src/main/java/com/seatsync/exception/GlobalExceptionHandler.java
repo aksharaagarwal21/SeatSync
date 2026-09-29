@@ -9,6 +9,7 @@ import org.springframework.dao.PessimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
+import org.springframework.mail.MailException;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.core.AuthenticationException;
@@ -72,6 +73,23 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(BusinessRuleException.class)
     ResponseEntity<ApiError> handleBusinessRule(BusinessRuleException ex) {
         return respond(HttpStatus.UNPROCESSABLE_ENTITY, "Request Not Allowed", ex.getMessage());
+    }
+
+    @ExceptionHandler(VerificationFailedException.class)
+    ResponseEntity<ApiError> handleVerificationFailed(VerificationFailedException ex) {
+        return respond(HttpStatus.UNPROCESSABLE_ENTITY, "Verification Failed", ex.getMessage());
+    }
+
+    @ExceptionHandler(TooManyRequestsException.class)
+    ResponseEntity<ApiError> handleTooManyRequests(TooManyRequestsException ex) {
+        return respond(HttpStatus.TOO_MANY_REQUESTS, "Too Many Requests", ex.getMessage());
+    }
+
+    @ExceptionHandler(MailException.class)
+    ResponseEntity<ApiError> handleMailFailure(MailException ex) {
+        log.error("Could not send verification email: {}", ex.getMessage());
+        return respond(HttpStatus.SERVICE_UNAVAILABLE, "Email Unavailable",
+                "We couldn't send your verification code. Please try again in a moment.");
     }
 
     @ExceptionHandler(MethodArgumentNotValidException.class)

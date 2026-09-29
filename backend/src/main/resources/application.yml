@@ -29,6 +29,17 @@ spring:
   jackson:
     serialization:
       write-dates-as-timestamps: false
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    properties:
+      mail.smtp.auth: ${MAIL_SMTP_AUTH:false}
+      mail.smtp.starttls.enable: ${MAIL_STARTTLS:false}
+      mail.smtp.connectiontimeout: 5000
+      mail.smtp.timeout: 5000
+      mail.smtp.writetimeout: 5000
 
 server:
   port: ${PORT:8080}
@@ -43,6 +54,9 @@ management:
     health:
       probes:
         enabled: true
+  health:
+    mail:
+      enabled: false
 
 seatsync:
   time-zone: Asia/Kolkata
@@ -56,3 +70,12 @@ seatsync:
     hold-duration: ${BOOKING_HOLD_DURATION:5m}
     cancellation-cutoff: 24h
     hold-sweep-interval: 30s
+  otp:
+    enabled: ${OTP_ENABLED:true}
+    code-ttl: 5m
+    max-attempts: 5
+    resend-cooldown: 30s
+    max-sends: 5
+    max-challenges: 10
+    challenge-window: 15m
+    from: ${MAIL_FROM:SeatSync <no-reply@seatsync.dev>}
