@@ -54,9 +54,10 @@ export function NavBar() {
     }
   }, [menuOpen])
 
+  // Leave protected pages first so their guard doesn't bounce the user to the login screen.
   const handleLogout = async () => {
-    await logout()
     navigate('/')
+    await logout()
   }
 
   const links = (

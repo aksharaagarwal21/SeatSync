@@ -14,6 +14,7 @@ interface AuthContextValue {
 
 const AuthContext = createContext<AuthContextValue | null>(null)
 const SESSION_KEY = ['auth', 'me'] as const
+const USER_SCOPED_KEYS = new Set(['bookings', 'booking', 'admin', 'seats'])
 
 /**
  * The JWT lives in an HttpOnly cookie the page can't read, so the session is restored
@@ -36,13 +37,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     retry: false,
   })
 
-  const startSession = useCallback(
-    (response: LoginResponse) => {
-      queryClient.removeQueries({ predicate: (query) => query.queryKey[0] !== 'events' && query.queryKey[0] !== 'event' })
-      queryClient.setQueryData(SESSION_KEY, response.user)
-      return response.user
+  /**
+   * Updates the session query in place and resets data that belongs to the previous user (bookings,
+   * admin views, seat maps with heldByMe flags). Queries are reset, never removed: a removed query
+   * stops notifying the components subscribed to it, which left the UI signed out after login.
+   */
+  const switchUser = useCallback(
+    (next: User | null) => {
+      queryClient.setQueryData(SESSION_KEY, next)
+      queryClient.resetQueries({ predicate: (query) => USER_SCOPED_KEYS.has(String(query.queryKey[0])) })
     },
     [queryClient],
+  )
+
+  const startSession = useCallback(
+    (response: LoginResponse) => {
+      switchUser(response.user)
+      return response.user
+    },
+    [switchUser],
   )
 
   const login = useCallback(
@@ -59,9 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const logout = useCallback(async () => {
     await api<void>('/auth/logout', { method: 'POST' })
-    queryClient.clear()
-    queryClient.setQueryData(SESSION_KEY, null)
-  }, [queryClient])
+    switchUser(null)
+  }, [switchUser])
 
   const value = useMemo(
     () => ({ user, isLoading, isAdmin: user?.role === 'ADMIN', login, register, logout }),
