@@ -13,10 +13,29 @@ export interface User {
   role: Role
 }
 
+export type VerificationPurpose = 'LOGIN' | 'REGISTRATION' | 'BOOKING' | 'CANCELLATION'
+
+/** A code was emailed (required = true), or two-step verification is switched off (required = false). */
+export interface VerificationChallenge {
+  required: boolean
+  challengeId?: string
+  purpose?: VerificationPurpose
+  maskedEmail?: string
+  expiresAt?: string
+  resendAvailableAt?: string
+}
+
+export interface VerificationCode {
+  challengeId: string
+  code: string
+}
+
+/** Either a signed-in session, or a challenge whose emailed code must be confirmed first. */
 export interface LoginResponse {
-  token: string
-  expiresAt: string
-  user: User
+  token?: string
+  expiresAt?: string
+  user?: User
+  verification?: VerificationChallenge
 }
 
 export interface Page<T> {

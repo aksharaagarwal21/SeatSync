@@ -1,14 +1,18 @@
 import { createContext, useCallback, useContext, useMemo, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { api, ApiError } from '../lib/api'
-import type { LoginResponse, User } from '../lib/types'
+import type { LoginResponse, User, VerificationChallenge, VerificationCode } from '../lib/types'
+
+/** Result of the first step: either signed in, or a code was emailed and must be entered. */
+export type AuthStep = { status: 'signed-in'; user: User } | { status: 'verify'; challenge: VerificationChallenge }
 
 interface AuthContextValue {
   user: User | null
   isLoading: boolean
   isAdmin: boolean
-  login: (email: string, password: string) => Promise<User>
-  register: (name: string, email: string, password: string) => Promise<User>
+  login: (email: string, password: string) => Promise<AuthStep>
+  register: (name: string, email: string, password: string) => Promise<AuthStep>
+  verify: (code: VerificationCode) => Promise<User>
   logout: () => Promise<void>
 }
 
@@ -50,24 +54,36 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     [queryClient],
   )
 
-  const startSession = useCallback(
-    (response: LoginResponse) => {
-      switchUser(response.user)
-      return response.user
+  const toStep = useCallback(
+    (response: LoginResponse): AuthStep => {
+      if (response.user) {
+        switchUser(response.user)
+        return { status: 'signed-in', user: response.user }
+      }
+      return { status: 'verify', challenge: response.verification! }
     },
     [switchUser],
   )
 
   const login = useCallback(
     async (email: string, password: string) =>
-      startSession(await api<LoginResponse>('/auth/login', { method: 'POST', body: { email, password } })),
-    [startSession],
+      toStep(await api<LoginResponse>('/auth/login', { method: 'POST', body: { email, password } })),
+    [toStep],
   )
 
   const register = useCallback(
     async (name: string, email: string, password: string) =>
-      startSession(await api<LoginResponse>('/auth/register', { method: 'POST', body: { name, email, password } })),
-    [startSession],
+      toStep(await api<LoginResponse>('/auth/register', { method: 'POST', body: { name, email, password } })),
+    [toStep],
+  )
+
+  const verify = useCallback(
+    async (code: VerificationCode) => {
+      const response = await api<LoginResponse>('/auth/verify', { method: 'POST', body: code })
+      switchUser(response.user!)
+      return response.user!
+    },
+    [switchUser],
   )
 
   const logout = useCallback(async () => {
@@ -76,8 +92,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [switchUser])
 
   const value = useMemo(
-    () => ({ user, isLoading, isAdmin: user?.role === 'ADMIN', login, register, logout }),
-    [user, isLoading, login, register, logout],
+    () => ({ user, isLoading, isAdmin: user?.role === 'ADMIN', login, register, verify, logout }),
+    [user, isLoading, login, register, verify, logout],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>

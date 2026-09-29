@@ -15,6 +15,8 @@ import type {
   HoldResponse,
   Page,
   Seat,
+  VerificationChallenge,
+  VerificationCode,
 } from '../lib/types'
 
 export interface EventSearch {
@@ -50,10 +52,21 @@ export const eventsApi = {
 export const bookingApi = {
   hold: (eventId: number, seatIds: number[]) => api<HoldResponse>('/holds', { method: 'POST', body: { eventId, seatIds } }),
   releaseHold: (eventId: number) => api<void>('/holds', { method: 'DELETE', query: { eventId } }),
-  create: (eventId: number, seatIds: number[]) => api<Booking>('/bookings', { method: 'POST', body: { eventId, seatIds } }),
+  create: (eventId: number, seatIds: number[], verification?: VerificationCode) =>
+    api<Booking>('/bookings', { method: 'POST', body: { eventId, seatIds, verification } }),
   mine: (page: number) => api<Page<Booking>>('/bookings/me', { query: { page, size: 10 } }),
   get: (id: number) => api<Booking>(`/bookings/${id}`),
-  cancel: (id: number) => api<Booking>(`/bookings/${id}`, { method: 'DELETE' }),
+  cancel: (id: number, verification?: VerificationCode) =>
+    api<Booking>(`/bookings/${id}/cancel`, { method: 'POST', body: { verification } }),
+}
+
+export type ActionVerificationRequest =
+  | { purpose: 'BOOKING'; eventId: number; seatIds: number[] }
+  | { purpose: 'CANCELLATION'; bookingId: number }
+
+export const verificationApi = {
+  request: (request: ActionVerificationRequest) => api<VerificationChallenge>('/verifications', { method: 'POST', body: request }),
+  resend: (challengeId: string) => api<VerificationChallenge>(`/verifications/${challengeId}/resend`, { method: 'POST' }),
 }
 
 export const adminApi = {

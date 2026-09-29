@@ -6,6 +6,9 @@ import { useAuth } from '../context/AuthContext'
 import { ApiError, errorMessage } from '../lib/api'
 import { AuthCard } from '../components/auth/AuthCard'
 import { redirectTarget } from '../lib/redirect'
+import { VerificationPanel } from '../components/verification/VerificationPanel'
+import type { VerificationChallenge } from '../lib/types'
+import { ArrowLeft } from 'lucide-react'
 
 interface FormState {
   name: string
@@ -29,7 +32,7 @@ function validate(form: FormState): FormErrors {
 }
 
 export function RegisterPage() {
-  const { user, register } = useAuth()
+  const { user, register, verify } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const [form, setForm] = useState<FormState>({ name: '', email: '', password: '', confirmPassword: '' })
@@ -37,6 +40,7 @@ export function RegisterPage() {
   const [touched, setTouched] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const [challenge, setChallenge] = useState<VerificationChallenge | null>(null)
 
   if (user) return <Navigate to={redirectTarget(location)} replace />
 
@@ -56,13 +60,39 @@ export function RegisterPage() {
 
     setSubmitting(true)
     try {
-      await register(form.name.trim(), form.email.trim(), form.password)
-      navigate(redirectTarget(location), { replace: true })
+      const step = await register(form.name.trim(), form.email.trim(), form.password)
+      if (step.status === 'verify') setChallenge(step.challenge)
+      else navigate(redirectTarget(location), { replace: true })
     } catch (err) {
       if (err instanceof ApiError && Object.keys(err.fieldErrors).length) setErrors(err.fieldErrors)
       else setFormError(errorMessage(err))
+    } finally {
       setSubmitting(false)
     }
+  }
+
+  if (challenge) {
+    return (
+      <AuthCard title="Verify your email" subtitle="Enter the code to activate your account.">
+        <div className="mt-6">
+          <VerificationPanel
+            challenge={challenge}
+            submitLabel="Verify and create account"
+            onVerify={async (code) => {
+              await verify(code)
+              navigate(redirectTarget(location), { replace: true })
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => setChallenge(null)}
+            className="mx-auto mt-3 flex items-center gap-1.5 rounded-md text-sm text-zinc-500 hover:text-zinc-900"
+          >
+            <ArrowLeft className="size-3.5" aria-hidden /> Change details
+          </button>
+        </div>
+      </AuthCard>
+    )
   }
 
   return (
