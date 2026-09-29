@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    hikari:
+      maximum-pool-size: 30
+
+seatsync:
+  jwt:
+    secret: test-only-jwt-secret-with-at-least-32-characters
+  booking:
+    hold-sweep-interval: 1h
+
+logging:
+  level:
+    com.seatsync: INFO
+    org.hibernate.engine.jdbc.spi.SqlExceptionHelper: OFF
