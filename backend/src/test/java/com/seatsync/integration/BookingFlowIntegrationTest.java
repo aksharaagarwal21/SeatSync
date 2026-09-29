@@ -11,7 +11,6 @@ import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -57,10 +56,7 @@ class BookingFlowIntegrationTest extends AbstractIntegrationTest {
 
     @Test
     void bookingPersistsBookingAndMarksSeatsBooked() throws Exception {
-        String body = mockMvc.perform(post("/api/bookings")
-                        .header("Authorization", alice)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", event.id(), "seatIds", seats.subList(0, 2)))))
+        String body = mockMvc.perform(verifiedBooking(alice, event.id(), seats.subList(0, 2)))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.status").value("CONFIRMED"))
                 .andExpect(jsonPath("$.totalAmount").value(3000.0))
@@ -83,10 +79,7 @@ class BookingFlowIntegrationTest extends AbstractIntegrationTest {
     void secondUserGetsConflictForAlreadyBookedSeat() throws Exception {
         book(alice, seats.get(0));
 
-        mockMvc.perform(post("/api/bookings")
-                        .header("Authorization", bob)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", event.id(), "seatIds", List.of(seats.get(0), seats.get(1))))))
+        mockMvc.perform(verifiedBooking(bob, event.id(), List.of(seats.get(0), seats.get(1))))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.error").value("Booking Conflict"))
                 .andExpect(jsonPath("$.message").value("Seat A1 is no longer available."));
@@ -110,10 +103,7 @@ class BookingFlowIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(jsonPath("$[3].status").value("RESERVED"))
                 .andExpect(jsonPath("$[3].heldByMe").value(false));
 
-        mockMvc.perform(post("/api/bookings")
-                        .header("Authorization", bob)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", event.id(), "seatIds", List.of(seats.get(3))))))
+        mockMvc.perform(verifiedBooking(bob, event.id(), List.of(seats.get(3))))
                 .andExpect(status().isConflict());
 
         book(alice, seats.get(3));
@@ -123,10 +113,13 @@ class BookingFlowIntegrationTest extends AbstractIntegrationTest {
     void cancellationFreesSeatsForOtherUsers() throws Exception {
         long bookingId = book(alice, seats.get(5));
 
-        mockMvc.perform(delete("/api/bookings/{id}", bookingId).header("Authorization", bob))
+        mockMvc.perform(post("/api/verifications")
+                        .header("Authorization", bob)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(json(Map.of("purpose", "CANCELLATION", "bookingId", bookingId))))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(delete("/api/bookings/{id}", bookingId).header("Authorization", alice))
+        mockMvc.perform(verifiedCancellation(alice, bookingId))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("CANCELLED"));
 
@@ -151,18 +144,15 @@ class BookingFlowIntegrationTest extends AbstractIntegrationTest {
         AdminEventResponse other = createEvent(1, 5);
         Long foreignSeat = seatIds(other.id()).getFirst();
 
-        mockMvc.perform(post("/api/bookings")
+        mockMvc.perform(post("/api/verifications")
                         .header("Authorization", alice)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", event.id(), "seatIds", List.of(foreignSeat)))))
+                        .content(json(Map.of("purpose", "BOOKING", "eventId", event.id(), "seatIds", List.of(foreignSeat)))))
                 .andExpect(status().isNotFound());
     }
 
     private long book(String token, Long seatId) throws Exception {
-        String body = mockMvc.perform(post("/api/bookings")
-                        .header("Authorization", token)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", event.id(), "seatIds", List.of(seatId)))))
+        String body = mockMvc.perform(verifiedBooking(token, event.id(), List.of(seatId)))
                 .andExpect(status().isCreated())
                 .andReturn().getResponse().getContentAsString();
         return readJson(body).get("id").asLong();

@@ -23,6 +23,7 @@ import com.seatsync.security.AuthenticatedUser;
 import com.seatsync.service.locking.LockingStrategy;
 import com.seatsync.service.locking.SeatLockService;
 import com.seatsync.service.realtime.SeatsChangedEvent;
+import com.seatsync.service.verification.ActionVerification;
 import com.seatsync.support.TestFixtures;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Nested;
@@ -65,6 +66,7 @@ class BookingServiceTest {
     @Mock private SeatLockService seatLockService;
     @Mock private BookingReferenceGenerator referenceGenerator;
     @Mock private ApplicationEventPublisher eventPublisher;
+    @Mock private ActionVerification actionVerification;
 
     private BookingService bookingService;
     private Event event;
@@ -75,7 +77,7 @@ class BookingServiceTest {
         var properties = new BookingProperties(LockingStrategy.OPTIMISTIC, Duration.ofMinutes(5), Duration.ofHours(24));
         var policy = new BookingPolicy(Clock.fixed(NOW, ZONE), properties);
         bookingService = new BookingService(eventRepository, userRepository, bookingRepository, seatLockService,
-                policy, referenceGenerator, new BookingMapper(policy), eventPublisher, properties);
+                policy, referenceGenerator, new BookingMapper(policy), eventPublisher, properties, actionVerification);
         event = TestFixtures.event(10, LocalDate.of(2026, 9, 20), EventStatus.ON_SALE);
         user = TestFixtures.user(USER_ID, Role.USER);
     }
@@ -100,6 +102,7 @@ class BookingServiceTest {
             assertThat(a11.getStatus()).isEqualTo(SeatStatus.BOOKED);
             verify(seatLockService).flushSeatChanges();
             verify(bookingRepository).saveAndFlush(any(Booking.class));
+            verify(actionVerification).require(eq(USER_ID), eq(com.seatsync.entity.OtpPurpose.BOOKING), eq("event:10|seats:1,2"), any());
         }
 
         @Test
@@ -229,7 +232,7 @@ class BookingServiceTest {
             Booking booking = confirmedBooking(event, seat);
             when(bookingRepository.findWithDetailsById(50L)).thenReturn(Optional.of(booking));
 
-            BookingResponse response = bookingService.cancelBooking(owner, 50L);
+            BookingResponse response = bookingService.cancelBooking(owner, 50L, null);
 
             assertThat(response.status()).isEqualTo(BookingDisplayStatus.CANCELLED);
             assertThat(seat.getStatus()).isEqualTo(SeatStatus.AVAILABLE);
@@ -242,7 +245,7 @@ class BookingServiceTest {
             when(bookingRepository.findWithDetailsById(50L)).thenReturn(Optional.of(booking));
             var stranger = new AuthenticatedUser(77L, "x@test.dev", "Stranger", Role.USER);
 
-            assertThatThrownBy(() -> bookingService.cancelBooking(stranger, 50L))
+            assertThatThrownBy(() -> bookingService.cancelBooking(stranger, 50L, null))
                     .isInstanceOf(AccessDeniedException.class);
         }
 
@@ -252,7 +255,7 @@ class BookingServiceTest {
             Booking booking = confirmedBooking(tomorrowMorning, TestFixtures.seat(1, tomorrowMorning, "A", 10, "499.00"));
             when(bookingRepository.findWithDetailsById(50L)).thenReturn(Optional.of(booking));
 
-            assertThatThrownBy(() -> bookingService.cancelBooking(owner, 50L))
+            assertThatThrownBy(() -> bookingService.cancelBooking(owner, 50L, null))
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessageContaining("24 hours");
         }
@@ -263,7 +266,7 @@ class BookingServiceTest {
             booking.cancel(NOW);
             when(bookingRepository.findWithDetailsById(50L)).thenReturn(Optional.of(booking));
 
-            assertThatThrownBy(() -> bookingService.cancelBooking(owner, 50L))
+            assertThatThrownBy(() -> bookingService.cancelBooking(owner, 50L, null))
                     .isInstanceOf(BusinessRuleException.class)
                     .hasMessage("This booking is already cancelled.");
         }

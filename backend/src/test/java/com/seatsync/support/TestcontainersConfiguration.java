@@ -3,6 +3,7 @@ package com.seatsync.support;
 import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
 import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Primary;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.utility.DockerImageName;
 
@@ -15,5 +16,12 @@ public class TestcontainersConfiguration {
     PostgreSQLContainer<?> postgres() {
         return new PostgreSQLContainer<>(DockerImageName.parse("postgres:16-alpine"))
                 .withCommand("postgres", "-c", "max_connections=200");
+    }
+
+    /** Replaces email delivery so tests can read the codes they need. */
+    @Bean
+    @Primary
+    RecordingOtpNotifier recordingOtpNotifier() {
+        return new RecordingOtpNotifier();
     }
 }

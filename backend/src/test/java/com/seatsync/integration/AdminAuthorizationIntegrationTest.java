@@ -62,9 +62,9 @@ class AdminAuthorizationIntegrationTest extends AbstractIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("PAUSED"));
 
-        mockMvc.perform(post("/api/bookings").header("Authorization", user)
+        mockMvc.perform(post("/api/verifications").header("Authorization", user)
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", eventId, "seatIds", seatIds(eventId).subList(0, 1)))))
+                        .content(json(Map.of("purpose", "BOOKING", "eventId", eventId, "seatIds", seatIds(eventId).subList(0, 1)))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.message").value("Booking is closed for this event."));
     }
@@ -72,9 +72,7 @@ class AdminAuthorizationIntegrationTest extends AbstractIntegrationTest {
     @Test
     void eventWithBookingsCannotBeDeleted() throws Exception {
         long eventId = createEvent(1, 5).id();
-        mockMvc.perform(post("/api/bookings").header("Authorization", user)
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(json(Map.of("eventId", eventId, "seatIds", seatIds(eventId).subList(0, 1)))))
+        mockMvc.perform(verifiedBooking(user, eventId, seatIds(eventId).subList(0, 1)))
                 .andExpect(status().isCreated());
 
         mockMvc.perform(delete("/api/admin/events/{id}", eventId).header("Authorization", admin))
