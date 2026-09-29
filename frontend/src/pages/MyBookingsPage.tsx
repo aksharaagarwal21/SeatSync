@@ -1,18 +1,22 @@
+import { useState } from 'react'
 import { useInfiniteQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Ticket } from 'lucide-react'
-import { bookingApi, queryKeys } from '../api/queries'
+import { bookingApi, queryKeys, verificationApi } from '../api/queries'
 import { PageHeader } from '../components/layout/AppLayout'
 import { BookingCard } from '../components/bookings/BookingCard'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { Skeleton } from '../components/ui/Skeleton'
 import { EmptyState, ErrorState } from '../components/ui/States'
+import { VerificationDialog } from '../components/verification/VerificationDialog'
 import { useToast } from '../context/ToastContext'
 import { errorMessage } from '../lib/api'
-import type { Booking } from '../lib/types'
+import { formatPrice } from '../lib/format'
+import type { Booking, VerificationChallenge, VerificationCode } from '../lib/types'
 
 export function MyBookingsPage() {
   const queryClient = useQueryClient()
   const toast = useToast()
+  const [pending, setPending] = useState<{ booking: Booking; challenge: VerificationChallenge } | null>(null)
 
   const { data, isPending, isError, error, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } = useInfiniteQuery({
     queryKey: queryKeys.myBookings,
@@ -22,17 +26,29 @@ export function MyBookingsPage() {
   })
 
   const cancel = useMutation({
-    mutationFn: (booking: Booking) => bookingApi.cancel(booking.id),
+    mutationFn: ({ booking, verification }: { booking: Booking; verification?: VerificationCode }) =>
+      bookingApi.cancel(booking.id, verification),
     onSuccess: (cancelled) => {
+      setPending(null)
       queryClient.invalidateQueries({ queryKey: queryKeys.myBookings })
       queryClient.invalidateQueries({ queryKey: queryKeys.seats(cancelled.eventId) })
       queryClient.setQueryData(queryKeys.booking(cancelled.id), cancelled)
       toast.success(`Booking ${cancelled.reference} cancelled. Your seats have been released.`)
     },
+  })
+
+  // Step-up verification: the emailed code approves cancelling this one booking.
+  const requestCode = useMutation({
+    mutationFn: (booking: Booking) => verificationApi.request({ purpose: 'CANCELLATION', bookingId: booking.id }),
+    onSuccess: (challenge, booking) =>
+      challenge.required
+        ? setPending({ booking, challenge })
+        : cancel.mutate({ booking }, { onError: (err) => toast.warning(errorMessage(err)) }),
     onError: (err) => toast.warning(errorMessage(err)),
   })
 
   const bookings = data?.pages.flatMap((page) => page.content) ?? []
+  const busyId = requestCode.isPending ? requestCode.variables?.id : cancel.isPending && !pending ? cancel.variables?.booking.id : undefined
 
   return (
     <>
@@ -53,8 +69,8 @@ export function MyBookingsPage() {
             <BookingCard
               key={booking.id}
               booking={booking}
-              onCancel={(target) => cancel.mutate(target)}
-              cancelling={cancel.isPending && cancel.variables?.id === booking.id}
+              onCancel={(target) => requestCode.mutate(target)}
+              cancelling={busyId === booking.id}
             />
           ))}
           {hasNextPage && (
@@ -65,6 +81,24 @@ export function MyBookingsPage() {
             </div>
           )}
         </div>
+      )}
+
+      {pending && (
+        <VerificationDialog
+          title="Confirm cancellation"
+          challenge={pending.challenge}
+          submitLabel="Cancel booking"
+          onClose={() => setPending(null)}
+          onVerify={(verification) => cancel.mutateAsync({ booking: pending.booking, verification })}
+        >
+          <div className="rounded-lg border border-zinc-200 px-3.5 py-3 text-sm">
+            <p className="font-medium">{pending.booking.eventName}</p>
+            <p className="mt-0.5 text-zinc-500">
+              {pending.booking.reference} · Seats {pending.booking.seats.map((seat) => seat.seatNumber).join(', ')} ·{' '}
+              {formatPrice(pending.booking.totalAmount)}
+            </p>
+          </div>
+        </VerificationDialog>
       )}
     </>
   )

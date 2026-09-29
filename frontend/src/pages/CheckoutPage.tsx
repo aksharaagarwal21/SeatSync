@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ArrowLeft, CalendarDays, MapPin, Timer } from 'lucide-react'
-import { bookingApi, queryKeys, useEvent, useSeats } from '../api/queries'
+import { bookingApi, queryKeys, useEvent, useSeats, verificationApi } from '../api/queries'
+import { VerificationDialog } from '../components/verification/VerificationDialog'
 import { EventImage } from '../components/events/EventImage'
 import { Button, ButtonLink } from '../components/ui/Button'
 import { Skeleton } from '../components/ui/Skeleton'
@@ -12,6 +14,7 @@ import { useSeatUpdates } from '../hooks/useSeatUpdates'
 import { ApiError, errorMessage } from '../lib/api'
 import { formatLongDate, formatPrice, formatTime, SECTION_LABELS } from '../lib/format'
 import { cn } from '../lib/cn'
+import type { VerificationChallenge, VerificationCode } from '../lib/types'
 
 export function CheckoutPage() {
   const eventId = Number(useParams().eventId)
@@ -27,17 +30,32 @@ export function CheckoutPage() {
   const secondsLeft = useCountdown(expiresAt)
   const total = heldSeats.reduce((sum, seat) => sum + seat.price, 0)
 
+  const [challenge, setChallenge] = useState<VerificationChallenge | null>(null)
+  const seatIds = heldSeats.map((seat) => seat.id)
+
   const book = useMutation({
-    mutationFn: () => bookingApi.create(eventId, heldSeats.map((seat) => seat.id)),
+    mutationFn: (verification?: VerificationCode) => bookingApi.create(eventId, seatIds, verification),
     onSuccess: (booking) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.myBookings })
       queryClient.setQueryData(queryKeys.booking(booking.id), booking)
       navigate(`/bookings/${booking.id}`, { replace: true, state: { justBooked: true } })
     },
     onError: (err) => {
-      toast.warning(err instanceof ApiError && err.isConflict ? `${err.message} Please choose another seat.` : errorMessage(err))
-      if (err instanceof ApiError && err.isConflict) navigate(`/events/${eventId}/seats`)
+      if (err instanceof ApiError && err.isConflict) {
+        setChallenge(null)
+        toast.warning(`${err.message} Please choose another seat.`)
+        navigate(`/events/${eventId}/seats`)
+      } else if (!challenge) {
+        toast.warning(errorMessage(err))
+      }
     },
+  })
+
+  // Step-up verification: the emailed code approves exactly these seats.
+  const requestCode = useMutation({
+    mutationFn: () => verificationApi.request({ purpose: 'BOOKING', eventId, seatIds }),
+    onSuccess: (issued) => (issued.required ? setChallenge(issued) : book.mutate(undefined)),
+    onError: (err) => toast.warning(errorMessage(err)),
   })
 
   if (eventError || isError) {
@@ -116,10 +134,27 @@ export function CheckoutPage() {
         <ButtonLink to={`/events/${eventId}/seats`} variant="secondary" size="lg">
           Change seats
         </ButtonLink>
-        <Button size="lg" onClick={() => book.mutate()} loading={book.isPending}>
+        <Button size="lg" onClick={() => requestCode.mutate()} loading={requestCode.isPending || (book.isPending && !challenge)}>
           Confirm Booking
         </Button>
       </div>
+
+      {challenge && (
+        <VerificationDialog
+          title="Confirm your booking"
+          challenge={challenge}
+          submitLabel={`Confirm booking · ${formatPrice(total)}`}
+          onClose={() => setChallenge(null)}
+          onVerify={(code) => book.mutateAsync(code)}
+        >
+          <div className="rounded-lg border border-zinc-200 px-3.5 py-3 text-sm">
+            <p className="font-medium">{event.name}</p>
+            <p className="mt-0.5 text-zinc-500">
+              Seats {heldSeats.map((seat) => seat.seatNumber).join(', ')} · <span className="font-medium text-zinc-900">{formatPrice(total)}</span>
+            </p>
+          </div>
+        </VerificationDialog>
+      )}
     </div>
   )
 }
