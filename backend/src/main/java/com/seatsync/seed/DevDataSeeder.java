@@ -101,13 +101,13 @@ public class DevDataSeeder implements ApplicationRunner {
         for (int i = 1; i <= LOAD_TEST_USERS; i++) {
             loadTestUsers.add(new Object[]{"Load Tester " + i, "loadtest" + i + "@seatsync.dev", loadTestHash, "USER", Timestamp.from(now)});
         }
-        jdbc.batchUpdate("INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?)", loadTestUsers);
+        jdbc.batchUpdate("INSERT INTO users (name, email, password_hash, role, created_at, email_verified) VALUES (?, ?, ?, ?, ?, TRUE)", loadTestUsers);
         return customers;
     }
 
     private Long insertUser(String name, String email, String hash, String role, Instant createdAt) {
         return jdbc.queryForObject(
-                "INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, ?) RETURNING id",
+                "INSERT INTO users (name, email, password_hash, role, created_at, email_verified) VALUES (?, ?, ?, ?, ?, TRUE) RETURNING id",
                 Long.class, name, email, hash, role, Timestamp.from(createdAt));
     }
 

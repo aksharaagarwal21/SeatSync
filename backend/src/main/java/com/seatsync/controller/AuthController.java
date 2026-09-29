@@ -4,6 +4,7 @@ import com.seatsync.dto.auth.LoginRequest;
 import com.seatsync.dto.auth.LoginResponse;
 import com.seatsync.dto.auth.RegisterRequest;
 import com.seatsync.dto.auth.UserResponse;
+import com.seatsync.dto.verification.VerificationCode;
 import com.seatsync.security.AuthCookieFactory;
 import com.seatsync.security.AuthenticatedUser;
 import com.seatsync.service.AuthService;
@@ -32,12 +33,17 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<LoginResponse> register(@Valid @RequestBody RegisterRequest request) {
-        return withSessionCookie(HttpStatus.CREATED, authService.register(request));
+        return respond(HttpStatus.CREATED, authService.register(request));
     }
 
     @PostMapping("/login")
     public ResponseEntity<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return withSessionCookie(HttpStatus.OK, authService.login(request));
+        return respond(HttpStatus.OK, authService.login(request));
+    }
+
+    @PostMapping("/verify")
+    public ResponseEntity<LoginResponse> verify(@Valid @RequestBody VerificationCode code) {
+        return respond(HttpStatus.OK, authService.verify(code));
     }
 
     @PostMapping("/logout")
@@ -52,9 +58,12 @@ public class AuthController {
         return authService.getProfile(user.id());
     }
 
-    private ResponseEntity<LoginResponse> withSessionCookie(HttpStatus status, LoginResponse response) {
-        return ResponseEntity.status(status)
-                .header(HttpHeaders.SET_COOKIE, cookieFactory.create(response.token(), response.expiresAt()).toString())
-                .body(response);
+    /** The session cookie is only set once the user is fully authenticated. */
+    private ResponseEntity<LoginResponse> respond(HttpStatus status, LoginResponse response) {
+        var builder = ResponseEntity.status(status);
+        if (response.isAuthenticated()) {
+            builder.header(HttpHeaders.SET_COOKIE, cookieFactory.create(response.token(), response.expiresAt()).toString());
+        }
+        return builder.body(response);
     }
 }

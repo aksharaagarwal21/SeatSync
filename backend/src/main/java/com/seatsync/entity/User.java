@@ -35,6 +35,9 @@ public class User {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "email_verified", nullable = false)
+    private boolean emailVerified;
+
     protected User() {
     }
 
@@ -44,6 +47,26 @@ public class User {
         this.passwordHash = passwordHash;
         this.role = role;
         this.createdAt = createdAt;
+    }
+
+    /**
+     * An unverified sign-up can be restarted with the same email, so nobody can block an address
+     * they don't own by registering it first.
+     */
+    public void restartRegistration(String name, String passwordHash) {
+        if (emailVerified) {
+            throw new IllegalStateException("Verified accounts cannot restart registration");
+        }
+        this.name = name;
+        this.passwordHash = passwordHash;
+    }
+
+    public void markEmailVerified() {
+        this.emailVerified = true;
+    }
+
+    public boolean isEmailVerified() {
+        return emailVerified;
     }
 
     public Long getId() {

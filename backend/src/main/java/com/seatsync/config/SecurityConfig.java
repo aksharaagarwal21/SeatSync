@@ -36,7 +36,8 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 .authorizeHttpRequests(auth -> auth
                         .dispatcherTypeMatchers(DispatcherType.ASYNC, DispatcherType.ERROR).permitAll()
-                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/auth/register", "/api/auth/login", "/api/auth/verify", "/api/auth/logout").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/verifications/*/resend").permitAll()
                         .requestMatchers(HttpMethod.GET, "/api/events", "/api/events/**").permitAll()
                         .requestMatchers("/actuator/health/**").permitAll()
                         .requestMatchers("/api/admin/**").hasRole("ADMIN")
