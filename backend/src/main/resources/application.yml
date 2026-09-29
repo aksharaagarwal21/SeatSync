@@ -79,3 +79,4 @@ seatsync:
     max-challenges: 10
     challenge-window: 15m
     from: ${MAIL_FROM:SeatSync <no-reply@seatsync.dev>}
+    test-inbox-url: ${OTP_TEST_INBOX_URL:}

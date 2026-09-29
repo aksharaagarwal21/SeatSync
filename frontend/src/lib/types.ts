@@ -23,6 +23,8 @@ export interface VerificationChallenge {
   maskedEmail?: string
   expiresAt?: string
   resendAvailableAt?: string
+  /** Set when codes go to a local test inbox instead of real email. */
+  testInboxUrl?: string
 }
 
 export interface VerificationCode {

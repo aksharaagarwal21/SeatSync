@@ -18,6 +18,8 @@ import java.time.Duration;
  * @param maxChallenges       new challenges a user may start within {@code challengeWindow}
  * @param challengeWindow     rate-limit window
  * @param from                sender address for verification emails
+ * @param testInboxUrl        set when mail goes to a local catch-all inbox (Mailpit) instead of real
+ *                            mailboxes; the UI then tells users where their codes are. Blank in production.
  */
 @Validated
 @ConfigurationProperties(prefix = "seatsync.otp")
@@ -29,6 +31,11 @@ public record OtpProperties(
         @Min(1) int maxSends,
         @Min(1) int maxChallenges,
         @NotNull Duration challengeWindow,
-        @NotBlank String from
+        @NotBlank String from,
+        String testInboxUrl
 ) {
+
+    public boolean usesTestInbox() {
+        return testInboxUrl != null && !testInboxUrl.isBlank();
+    }
 }

@@ -48,6 +48,8 @@ services:
       MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
       MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
       MAIL_FROM: ${MAIL_FROM:-SeatSync <no-reply@seatsync.dev>}
+      # Tells the UI that codes land in Mailpit, not real inboxes. Set OTP_TEST_INBOX_URL= (empty) with real SMTP.
+      OTP_TEST_INBOX_URL: ${OTP_TEST_INBOX_URL-http://localhost:8025}
     depends_on:
       postgres:
         condition: service_healthy

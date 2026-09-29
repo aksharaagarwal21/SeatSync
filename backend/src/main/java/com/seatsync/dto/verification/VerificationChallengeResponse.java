@@ -17,10 +17,12 @@ public record VerificationChallengeResponse(
         OtpPurpose purpose,
         String maskedEmail,
         Instant expiresAt,
-        Instant resendAvailableAt
+        Instant resendAvailableAt,
+        /** Present only when codes go to a local test inbox rather than the user's real email. */
+        String testInboxUrl
 ) {
 
     public static VerificationChallengeResponse notRequired() {
-        return new VerificationChallengeResponse(false, null, null, null, null, null);
+        return new VerificationChallengeResponse(false, null, null, null, null, null, null);
     }
 }

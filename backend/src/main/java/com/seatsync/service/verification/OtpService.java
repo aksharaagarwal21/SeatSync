@@ -102,7 +102,8 @@ public class OtpService {
                 challenge.getPurpose(),
                 OtpCodes.maskEmail(challenge.getUser().getEmail()),
                 challenge.getExpiresAt(),
-                resendAvailableAt(challenge));
+                resendAvailableAt(challenge),
+                properties.usesTestInbox() ? properties.testInboxUrl() : null);
     }
 
     private Instant resendAvailableAt(OtpChallenge challenge) {

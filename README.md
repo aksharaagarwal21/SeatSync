@@ -504,7 +504,23 @@ The email says what is being approved, for example *"Book F8, F10 for Coastal Be
 - An **unverified sign-up can be restarted** with the same email, so nobody can block an address they don't own.
 - The challenge id is a random UUID, so it can't be guessed during sign-in.
 
-Locally, emails go to **Mailpit** (http://localhost:8025). In production, set the `MAIL_*` variables to any SMTP provider.
+Locally, emails go to **Mailpit** (http://localhost:8025), a test inbox that catches every email, so codes never reach real mailboxes. The code screen says so and links straight to the inbox, driven by `OTP_TEST_INBOX_URL`.
+
+### Sending real emails (Gmail)
+
+1. In your Google Account, turn on 2-Step Verification, then create an **App Password** (Security → App passwords).
+2. Put these in `.env` (never commit it):
+   ```
+   MAIL_HOST=smtp.gmail.com
+   MAIL_PORT=587
+   MAIL_USERNAME=you@gmail.com
+   MAIL_PASSWORD=your-16-character-app-password
+   MAIL_SMTP_AUTH=true
+   MAIL_STARTTLS=true
+   MAIL_FROM=SeatSync <you@gmail.com>
+   OTP_TEST_INBOX_URL=
+   ```
+3. `docker compose up -d backend`. Codes now arrive in real inboxes, and the test-mode notice disappears.
 
 ## Security notes
 

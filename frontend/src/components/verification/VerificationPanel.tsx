@@ -1,13 +1,11 @@
 import { useState, type ReactNode } from 'react'
-import { MailCheck } from 'lucide-react'
+import { ExternalLink, FlaskConical, MailCheck } from 'lucide-react'
 import { verificationApi } from '../../api/queries'
 import { formatCountdown, useCountdown } from '../../hooks/useCountdown'
 import { errorMessage } from '../../lib/api'
 import type { VerificationChallenge, VerificationCode } from '../../lib/types'
 import { Button } from '../ui/Button'
 import { OtpCodeInput } from './OtpCodeInput'
-
-const IS_LOCAL = ['localhost', '127.0.0.1'].includes(window.location.hostname)
 
 interface VerificationPanelProps {
   challenge: VerificationChallenge
@@ -65,17 +63,27 @@ export function VerificationPanel({ challenge: initialChallenge, onVerify, submi
         <MailCheck className="mt-0.5 size-4 shrink-0 text-brand-700" aria-hidden />
         <p className="text-sm text-zinc-600">
           We emailed a 6-digit code to <span className="font-medium text-zinc-900">{challenge.maskedEmail}</span>.
-          {IS_LOCAL && (
-            <>
-              {' '}Running locally? Open the test inbox at{' '}
-              <a href="http://localhost:8025" target="_blank" rel="noreferrer" className="font-medium text-brand-700 underline-offset-2 hover:underline">
-                localhost:8025
-              </a>
-              .
-            </>
-          )}
         </p>
       </div>
+
+      {challenge.testInboxUrl && (
+        <div className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3.5 py-3 text-sm text-amber-900" role="note">
+          <p className="flex items-center gap-2 font-medium">
+            <FlaskConical className="size-4 shrink-0" aria-hidden /> Test mode: the code won’t reach your real inbox
+          </p>
+          <p className="mt-1 text-amber-800">
+            This SeatSync server delivers emails to a local test inbox. Open it to see your code.
+          </p>
+          <a
+            href={challenge.testInboxUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-2.5 inline-flex h-8 items-center gap-1.5 rounded-lg border border-amber-300 bg-white px-3 text-[13px] font-medium text-amber-900 hover:bg-amber-100"
+          >
+            Open test inbox <ExternalLink className="size-3.5" aria-hidden />
+          </a>
+        </div>
+      )}
 
       {children && <div className="mt-4">{children}</div>}
 
