@@ -5,3 +5,4 @@ seatsync:
     secret: ${JWT_SECRET:dev-only-insecure-jwt-secret-change-me-in-production}
   seed:
     enabled: ${SEED_DATA:true}
+    admin-password: ${SEED_ADMIN_PASSWORD:Admin@12345}

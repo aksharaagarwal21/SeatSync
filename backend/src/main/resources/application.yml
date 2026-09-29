@@ -70,6 +70,11 @@ seatsync:
     hold-duration: ${BOOKING_HOLD_DURATION:5m}
     cancellation-cutoff: 24h
     hold-sweep-interval: 30s
+  seed:
+    enabled: ${SEED_DATA:false}
+    admin-email: ${SEED_ADMIN_EMAIL:admin@seatsync.dev}
+    admin-password: ${SEED_ADMIN_PASSWORD:}
+    load-test-users: ${SEED_LOAD_TEST_USERS:true}
   otp:
     enabled: ${OTP_ENABLED:true}
     code-ttl: 5m

@@ -1,5 +1,6 @@
 package com.seatsync.seed;
 
+import com.seatsync.config.SeedProperties;
 import com.seatsync.dto.admin.SectionPricing;
 import com.seatsync.service.layout.SeatLayoutPlanner;
 import com.seatsync.service.layout.SeatLayoutPlanner.PlannedSeat;
@@ -8,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
-import org.springframework.context.annotation.Profile;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Component;
@@ -30,19 +30,16 @@ import java.util.List;
 import java.util.Random;
 
 /**
- * Seeds a realistic dataset for local development and load testing: 50 events × 200 seats
- * (10,000 seats), demo accounts, 500 load-test accounts and a history of bookings.
- * Runs only with the {@code dev} profile and only against an empty database.
+ * Seeds a realistic dataset: 50 events × 200 seats (10,000 seats), an admin, demo customers,
+ * optional load-test accounts and a history of bookings. Enabled by {@code seatsync.seed.enabled}
+ * (on in the dev profile, opt-in elsewhere) and only runs against an empty database.
  * A fixed random seed keeps the data identical between runs.
  */
 @Component
-@Profile("dev")
 @ConditionalOnProperty(prefix = "seatsync.seed", name = "enabled", havingValue = "true")
 public class DevDataSeeder implements ApplicationRunner {
 
-    public static final String ADMIN_EMAIL = "admin@seatsync.dev";
     public static final String DEMO_EMAIL = "demo@seatsync.dev";
-    public static final String ADMIN_PASSWORD = "Admin@12345";
     public static final String DEMO_PASSWORD = "Demo@12345";
     public static final String LOAD_TEST_PASSWORD = "LoadTest@123";
     public static final int LOAD_TEST_USERS = 500;
@@ -58,13 +55,16 @@ public class DevDataSeeder implements ApplicationRunner {
     private final PasswordEncoder passwordEncoder;
     private final SeatLayoutPlanner layoutPlanner;
     private final Clock clock;
+    private final SeedProperties properties;
     private final Random random = new Random(42);
 
-    public DevDataSeeder(JdbcTemplate jdbc, PasswordEncoder passwordEncoder, SeatLayoutPlanner layoutPlanner, Clock clock) {
+    public DevDataSeeder(JdbcTemplate jdbc, PasswordEncoder passwordEncoder, SeatLayoutPlanner layoutPlanner,
+                         Clock clock, SeedProperties properties) {
         this.jdbc = jdbc;
         this.passwordEncoder = passwordEncoder;
         this.layoutPlanner = layoutPlanner;
         this.clock = clock;
+        this.properties = properties;
     }
 
     @Override
@@ -74,6 +74,9 @@ public class DevDataSeeder implements ApplicationRunner {
         if (existing != null && existing > 0) {
             log.info("Seed skipped: database already has {} events", existing);
             return;
+        }
+        if (properties.adminPassword() == null || properties.adminPassword().length() < 8) {
+            throw new IllegalStateException("Set SEED_ADMIN_PASSWORD (8+ characters) before seeding a database");
         }
         long started = System.currentTimeMillis();
         List<Long> customerIds = seedUsers();
@@ -85,7 +88,8 @@ public class DevDataSeeder implements ApplicationRunner {
 
     private List<Long> seedUsers() {
         Instant now = clock.instant();
-        insertUser("SeatSync Admin", ADMIN_EMAIL, passwordEncoder.encode(ADMIN_PASSWORD), "ADMIN", now.minus(Duration.ofDays(60)));
+        insertUser("SeatSync Admin", properties.adminEmail().trim().toLowerCase(), passwordEncoder.encode(properties.adminPassword()),
+                "ADMIN", now.minus(Duration.ofDays(60)));
         List<Long> customers = new ArrayList<>();
         customers.add(insertUser("Demo User", DEMO_EMAIL, passwordEncoder.encode(DEMO_PASSWORD), "USER", now.minus(Duration.ofDays(45))));
 
@@ -95,6 +99,9 @@ public class DevDataSeeder implements ApplicationRunner {
             customers.add(insertUser(name, email, sharedHash, "USER", now.minus(Duration.ofDays(5 + random.nextInt(40)))));
         }
 
+        if (!properties.loadTestUsers()) {
+            return customers;
+        }
         // One hash for all load-test accounts: BCrypt is deliberately slow, 500 hashes would take ~40s.
         String loadTestHash = passwordEncoder.encode(LOAD_TEST_PASSWORD);
         List<Object[]> loadTestUsers = new ArrayList<>(LOAD_TEST_USERS);
