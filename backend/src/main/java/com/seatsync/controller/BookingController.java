@@ -2,6 +2,7 @@ package com.seatsync.controller;
 
 import com.seatsync.dto.PageResponse;
 import com.seatsync.dto.booking.BookingResponse;
+import com.seatsync.dto.booking.CancelBookingRequest;
 import com.seatsync.dto.booking.CreateBookingRequest;
 import com.seatsync.security.AuthenticatedUser;
 import com.seatsync.service.BookingService;
@@ -11,7 +12,6 @@ import jakarta.validation.constraints.Min;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.validation.annotation.Validated;
-import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,8 +52,10 @@ public class BookingController {
         return bookingService.getBooking(user, bookingId);
     }
 
-    @DeleteMapping("/{bookingId}")
-    public BookingResponse cancelBooking(@AuthenticationPrincipal AuthenticatedUser user, @PathVariable Long bookingId) {
-        return bookingService.cancelBooking(user, bookingId);
+    @PostMapping("/{bookingId}/cancel")
+    public BookingResponse cancelBooking(@AuthenticationPrincipal AuthenticatedUser user,
+                                         @PathVariable Long bookingId,
+                                         @Valid @RequestBody CancelBookingRequest request) {
+        return bookingService.cancelBooking(user, bookingId, request.verification());
     }
 }

@@ -4,10 +4,12 @@ import com.seatsync.config.BookingProperties;
 import com.seatsync.dto.PageResponse;
 import com.seatsync.dto.admin.AdminBookingResponse;
 import com.seatsync.dto.booking.BookingResponse;
+import com.seatsync.dto.verification.VerificationCode;
 import com.seatsync.dto.booking.CreateBookingRequest;
 import com.seatsync.entity.Booking;
 import com.seatsync.entity.BookingStatus;
 import com.seatsync.entity.Event;
+import com.seatsync.entity.OtpPurpose;
 import com.seatsync.entity.Seat;
 import com.seatsync.exception.BookingConflictException;
 import com.seatsync.exception.BusinessRuleException;
@@ -22,6 +24,7 @@ import com.seatsync.security.AuthenticatedUser;
 import com.seatsync.service.locking.LockingStrategy;
 import com.seatsync.service.locking.SeatLockService;
 import com.seatsync.service.realtime.SeatsChangedEvent;
+import com.seatsync.service.verification.ActionVerification;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.dao.OptimisticLockingFailureException;
@@ -47,6 +50,7 @@ public class BookingService {
     private final BookingMapper bookingMapper;
     private final ApplicationEventPublisher eventPublisher;
     private final BookingProperties properties;
+    private final ActionVerification actionVerification;
 
     public BookingService(EventRepository eventRepository,
                           UserRepository userRepository,
@@ -56,7 +60,8 @@ public class BookingService {
                           BookingReferenceGenerator referenceGenerator,
                           BookingMapper bookingMapper,
                           ApplicationEventPublisher eventPublisher,
-                          BookingProperties properties) {
+                          BookingProperties properties,
+                          ActionVerification actionVerification) {
         this.eventRepository = eventRepository;
         this.userRepository = userRepository;
         this.bookingRepository = bookingRepository;
@@ -66,10 +71,17 @@ public class BookingService {
         this.bookingMapper = bookingMapper;
         this.eventPublisher = eventPublisher;
         this.properties = properties;
+        this.actionVerification = actionVerification;
     }
 
+    /**
+     * Customer entry point: the emailed code must approve exactly these seats. It is consumed in
+     * this transaction, so if the seats are lost to someone else the code stays valid for a retry.
+     */
     @Transactional
     public BookingResponse createBooking(Long userId, CreateBookingRequest request) {
+        actionVerification.require(userId, OtpPurpose.BOOKING,
+                ActionVerification.bookingContext(request.eventId(), request.seatIds()), request.verification());
         return createBooking(userId, request, properties.lockingStrategy());
     }
 
@@ -122,7 +134,7 @@ public class BookingService {
     }
 
     @Transactional
-    public BookingResponse cancelBooking(AuthenticatedUser viewer, Long bookingId) {
+    public BookingResponse cancelBooking(AuthenticatedUser viewer, Long bookingId, VerificationCode verification) {
         Booking booking = findAccessibleBooking(viewer, bookingId);
         if (booking.getStatus() == BookingStatus.CANCELLED) {
             throw new BusinessRuleException("This booking is already cancelled.");
@@ -131,6 +143,8 @@ public class BookingService {
             throw new BusinessRuleException("Bookings can only be cancelled up to "
                     + bookingPolicy.cancellationCutoffHours() + " hours before the event starts.");
         }
+        actionVerification.require(viewer.id(), OtpPurpose.CANCELLATION,
+                ActionVerification.cancellationContext(bookingId), verification);
 
         booking.cancel(bookingPolicy.now());
         try {
