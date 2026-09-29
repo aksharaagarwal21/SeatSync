@@ -14,7 +14,7 @@ export const EventCard = memo(function EventCard({ event }: { event: EventSummar
   return (
     <article className="group card flex flex-col overflow-hidden transition-shadow hover:shadow-raised">
       <Link to={`/events/${event.id}`} className="relative block focus-visible:outline-offset-[-2px]" tabIndex={-1} aria-hidden>
-        <EventImage src={event.imageUrl} alt="" category={event.category} className="aspect-[16/9] w-full" />
+        <EventImage src={event.imageUrl} alt="" category={event.category} className="aspect-[2/1] w-full" />
         <span className="absolute top-3 left-3 rounded-md bg-white/95 px-2 py-0.5 text-xs font-medium text-zinc-700 shadow-sm">
           {CATEGORY_LABELS[event.category]}
         </span>
@@ -64,7 +64,7 @@ export const EventCard = memo(function EventCard({ event }: { event: EventSummar
 export function EventCardSkeleton() {
   return (
     <div className="card overflow-hidden">
-      <Skeleton className="aspect-[16/9] w-full rounded-none" />
+      <Skeleton className="aspect-[2/1] w-full rounded-none" />
       <div className="space-y-2.5 p-4">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-3.5 w-1/2" />

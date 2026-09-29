@@ -1,4 +1,4 @@
-import { memo, useCallback, useMemo, useRef, useState, type KeyboardEvent } from 'react'
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react'
 import { Lock, X } from 'lucide-react'
 import type { Seat, SeatSection } from '../../lib/types'
 import { formatPrice, SECTION_LABELS } from '../../lib/format'
@@ -43,6 +43,13 @@ export function SeatMap({ seats, selectedIds, onToggle, readOnly = false }: Seat
   const [focusedId, setFocusedId] = useState<number | null>(null)
   const [tooltip, setTooltip] = useState<{ seat: Seat; left: number; top: number } | null>(null)
 
+  // On narrow screens the map scrolls sideways; start centred on the stage like a real auditorium view.
+  const hasSeats = seats.length > 0
+  useLayoutEffect(() => {
+    const container = containerRef.current
+    if (container && hasSeats) container.scrollLeft = (container.scrollWidth - container.clientWidth) / 2
+  }, [hasSeats])
+
   const tabbableId = focusedId ?? rows.flatMap((row) => row.seats).find((seat) => seat.status === 'AVAILABLE')?.id ?? seats[0]?.id
 
   const showTooltip = useCallback((seat: Seat, element: HTMLElement) => {
@@ -84,14 +91,14 @@ export function SeatMap({ seats, selectedIds, onToggle, readOnly = false }: Seat
     <div ref={containerRef} className="relative overflow-x-auto pb-2" onMouseLeave={hideTooltip}>
       <div className="mx-auto w-max min-w-full px-2">
         <Stage />
-        <div role="grid" aria-label="Seat map" aria-readonly={readOnly || undefined} onKeyDown={handleKeyDown} className="mt-6 flex flex-col items-center gap-1.5">
+        <div role="grid" aria-label="Seat map" aria-readonly={readOnly || undefined} onKeyDown={handleKeyDown} className="mt-6 flex flex-col items-center gap-1 sm:gap-1.5">
           {rows.map((row, index) => (
             <div key={row.label} className="contents">
               {(index === 0 || rows[index - 1].section !== row.section) && <SectionDivider section={row.section} seats={row.seats} first={index === 0} />}
-              <div role="row" aria-label={`Row ${row.label}`} className="flex items-center gap-1.5">
+              <div role="row" aria-label={`Row ${row.label}`} className="flex items-center gap-1">
                 <RowLabel label={row.label} />
                 {row.seats.map((seat, seatIndex) => (
-                  <div key={seat.id} role="gridcell" className={cn('flex', aisles.has(seatIndex) && 'ml-3 sm:ml-5')}>
+                  <div key={seat.id} role="gridcell" className={cn('flex', aisles.has(seatIndex) && 'ml-3 sm:ml-4')}>
                     <SeatButton
                       seat={seat}
                       state={seatVisualState(seat, selectedIds.has(seat.id))}

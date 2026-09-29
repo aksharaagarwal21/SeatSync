@@ -135,7 +135,7 @@ export function SeatSelectionPage() {
           ) : (
             <SeatMap seats={seats} selectedIds={selectedIds} onToggle={toggleSeat} readOnly={closed} />
           )}
-          <p className="mt-4 text-center text-xs text-zinc-400">Use arrow keys to move between seats and Enter to select.</p>
+          <p className="mt-4 hidden text-center text-xs text-zinc-400 sm:block">Use arrow keys to move between seats and Enter to select.</p>
         </section>
 
         <SelectionSummary
