@@ -19,7 +19,6 @@ spring:
       hibernate:
         default_batch_fetch_size: 100
         jdbc:
-          time_zone: UTC
           batch_size: 50
         order_updates: true
   flyway:
