@@ -1,0 +1,7 @@
+# Development profile: seeds demo data and provides an insecure JWT secret so the app
+# runs locally without extra setup. Never enable this profile in production.
+seatsync:
+  jwt:
+    secret: ${JWT_SECRET:dev-only-insecure-jwt-secret-change-me-in-production}
+  seed:
+    enabled: ${SEED_DATA:true}

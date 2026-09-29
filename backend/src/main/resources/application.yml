@@ -1,0 +1,59 @@
+spring:
+  application:
+    name: seatsync
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/seatsync}
+    username: ${DATABASE_USERNAME:seatsync}
+    password: ${DATABASE_PASSWORD:seatsync}
+    hikari:
+      pool-name: seatsync-db
+      maximum-pool-size: ${DATABASE_POOL_SIZE:20}
+      connection-timeout: 10000
+      data-source-properties:
+        reWriteBatchedInserts: true
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        default_batch_fetch_size: 100
+        jdbc:
+          time_zone: UTC
+          batch_size: 50
+        order_updates: true
+  flyway:
+    enabled: true
+  threads:
+    virtual:
+      enabled: true
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+
+server:
+  port: ${PORT:8080}
+  shutdown: graceful
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+  endpoint:
+    health:
+      probes:
+        enabled: true
+
+seatsync:
+  time-zone: Asia/Kolkata
+  jwt:
+    secret: ${JWT_SECRET}
+    expiration: ${JWT_EXPIRATION:24h}
+    cookie-name: seatsync_token
+    cookie-secure: ${JWT_COOKIE_SECURE:false}
+  booking:
+    locking-strategy: ${BOOKING_LOCKING_STRATEGY:OPTIMISTIC}
+    hold-duration: ${BOOKING_HOLD_DURATION:5m}
+    cancellation-cutoff: 24h
+    hold-sweep-interval: 30s
