@@ -1,0 +1,55 @@
+name: seatsync
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-seatsync}
+      POSTGRES_USER: ${DATABASE_USERNAME:-seatsync}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD:-seatsync}
+    command: ["postgres", "-c", "max_connections=200"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DATABASE_USERNAME:-seatsync} -d ${POSTGRES_DB:-seatsync}"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  backend:
+    build: ./backend
+    environment:
+      # "dev" seeds 50 events / 10,000 seats on first start. Use "default" for an empty database.
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-dev}
+      DATABASE_URL: ${DATABASE_URL:-jdbc:postgresql://postgres:5432/seatsync}
+      DATABASE_USERNAME: ${DATABASE_USERNAME:-seatsync}
+      DATABASE_PASSWORD: ${DATABASE_PASSWORD:-seatsync}
+      DATABASE_POOL_SIZE: ${DATABASE_POOL_SIZE:-30}
+      # Local-only fallback so `docker compose up` works out of the box. Set a real secret in .env.
+      JWT_SECRET: ${JWT_SECRET:-local-docker-only-jwt-secret-change-me-please}
+      JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
+      BOOKING_LOCKING_STRATEGY: ${BOOKING_LOCKING_STRATEGY:-OPTIMISTIC}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "${BACKEND_PORT:-8080}:8080"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/actuator/health/readiness | grep -q UP"]
+      interval: 5s
+      timeout: 3s
+      retries: 40
+      start_period: 20s
+
+  frontend:
+    build: ./frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "${FRONTEND_PORT:-3000}:80"
+
+volumes:
+  pgdata:
