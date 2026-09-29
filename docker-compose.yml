@@ -18,6 +18,14 @@ services:
       timeout: 3s
       retries: 20
 
+  # Local email inbox for verification codes: open http://localhost:8025.
+  # In production, point MAIL_HOST/MAIL_PORT/MAIL_USERNAME/MAIL_PASSWORD at a real SMTP provider instead.
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - "${MAILPIT_UI_PORT:-8025}:8025"
+      - "${MAILPIT_SMTP_PORT:-1025}:1025"
+
   backend:
     build: ./backend
     environment:
@@ -31,9 +39,20 @@ services:
       JWT_SECRET: ${JWT_SECRET:-local-docker-only-jwt-secret-change-me-please}
       JWT_EXPIRATION: ${JWT_EXPIRATION:-24h}
       BOOKING_LOCKING_STRATEGY: ${BOOKING_LOCKING_STRATEGY:-OPTIMISTIC}
+      # Two-step verification. Only set to false for automated load tests.
+      OTP_ENABLED: ${OTP_ENABLED:-true}
+      MAIL_HOST: ${MAIL_HOST:-mailpit}
+      MAIL_PORT: ${MAIL_PORT:-1025}
+      MAIL_USERNAME: ${MAIL_USERNAME:-}
+      MAIL_PASSWORD: ${MAIL_PASSWORD:-}
+      MAIL_SMTP_AUTH: ${MAIL_SMTP_AUTH:-false}
+      MAIL_STARTTLS: ${MAIL_STARTTLS:-false}
+      MAIL_FROM: ${MAIL_FROM:-SeatSync <no-reply@seatsync.dev>}
     depends_on:
       postgres:
         condition: service_healthy
+      mailpit:
+        condition: service_started
     ports:
       - "${BACKEND_PORT:-8080}:8080"
     healthcheck:
